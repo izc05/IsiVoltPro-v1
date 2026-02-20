@@ -206,11 +206,8 @@
     <section id="screenTimer" class="screen hidden">
       <div class="card glass center">
         <div class="row space-between">
-          <div>
-            <div class="muted">En proceso</div>
-            <div id="timerCode" class="bigcode">—</div>
-          </div>
-          <button class="btn btn-ghost" id="btnExitTimer">✖</button>
+          <div class="muted">Cronómetros activos</div>
+          <button class="btn btn-ghost" id="btnMinimizeTimer">🗕 Minimizar</button>
         </div>
 
         <div class="timer-tank">
@@ -222,10 +219,12 @@
           <div class="timer-overlay">
             <div id="timerLeft" class="timer-left">00:00</div>
             <div class="muted tiny" id="timerTarget">Objetivo: —</div>
+            <div class="muted tiny" id="timerProcessCode">Proceso inicial: —</div>
           </div>
         </div>
 
         <div class="row center">
+          <button id="btnNextTimer" class="btn btn-ghost">↹ Siguiente</button>
           <button id="btnPause" class="btn btn-ghost">⏸ Pausar</button>
           <button id="btnResume" class="btn btn-ghost hidden">▶ Reanudar</button>
           <button id="btnFinish" class="btn btn-primary">✅ Finalizar</button>
