@@ -19,6 +19,17 @@ body{
   overflow-x:hidden;
 }
 /* moving light */
+.bg-lightline{
+  position:fixed;
+  inset:-20% -10%;
+  background: linear-gradient(110deg, transparent 32%, rgba(130,236,255,.10) 48%, transparent 62%);
+  animation: lightline 9s linear infinite;
+  filter: blur(10px);
+  z-index:-4;
+  pointer-events:none;
+}
+@keyframes lightline{ from{ transform: translateX(-18%) translateY(0); } to{ transform: translateX(18%) translateY(-2%); } }
+
 .bg-sheen{
   position:fixed; inset:-40%;
   background:
@@ -212,41 +223,59 @@ h3{ font-size:15px; color: rgba(238,242,255,.92); }
 
 .center{ text-align:center; }
 
-/* Water tank timer */
+/* Water bowl timer */
 .timer-tank{
   position:relative;
-  width:min(360px, 86vw);
-  height:min(360px, 86vw);
+  width:min(400px, 90vw);
+  height:min(320px, 70vw);
   margin: 16px auto 8px;
-  border-radius: 28px;
+  border-radius: 34px 34px 52% 52%;
   overflow:hidden;
-  border:1px solid rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.18);
   box-shadow: var(--shadow);
-  background: rgba(0,0,0,.20);
+  background: radial-gradient(circle at 50% 0%, rgba(255,255,255,.08), rgba(0,0,0,.26));
+}
+.water-drop{
+  position:absolute;
+  left:50%;
+  top:-26px;
+  width:16px;
+  height:22px;
+  margin-left:-8px;
+  background: linear-gradient(180deg, rgba(180,244,255,.9), rgba(0,212,255,.35));
+  border-radius: 60% 60% 70% 70%;
+  transform: translateY(-30px);
+  opacity:0;
+  filter: drop-shadow(0 0 6px rgba(0,212,255,.45));
+}
+.timer-tank.running .water-drop{ animation: drip .9s linear infinite; opacity:.95; }
+@keyframes drip{
+  0%{ transform: translateY(-26px) scale(.7); opacity:0; }
+  20%{ opacity:1; }
+  100%{ transform: translateY(110px) scale(1); opacity:0; }
 }
 .water{
   position:absolute; left:0; right:0; bottom:0;
   height:0%;
   background:
-    radial-gradient(circle at 20% 30%, rgba(255,255,255,.18), transparent 42%),
-    radial-gradient(circle at 70% 60%, rgba(255,255,255,.14), transparent 46%),
-    linear-gradient(180deg, rgba(0,212,255,.55), rgba(46,196,182,.35));
-  filter: blur(.2px);
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,.20), transparent 42%),
+    radial-gradient(circle at 70% 60%, rgba(255,255,255,.12), transparent 46%),
+    linear-gradient(180deg, rgba(0,212,255,.65), rgba(46,196,182,.4));
   transition: height .25s linear;
 }
 .water::before{
   content:"";
-  position:absolute; left:-10%; right:-10%; top:-18px; height:40px;
-  background: rgba(255,255,255,.10);
+  position:absolute; left:-20%; right:-20%; top:-14px; height:32px;
+  background: rgba(255,255,255,.18);
   border-radius: 50%;
-  filter: blur(6px);
-  animation: wave 2.2s ease-in-out infinite;
-  opacity:.85;
+  filter: blur(5px);
+  animation: wave 1.8s ease-in-out infinite;
+  opacity:.9;
 }
-@keyframes wave{ 0%,100%{ transform: translateX(-8px);} 50%{ transform: translateX(10px);} }
+@keyframes wave{ 0%,100%{ transform: translateX(-12px);} 50%{ transform: translateX(12px);} }
 .tank-glass{
   position:absolute; inset:0;
-  background: linear-gradient(120deg, rgba(255,255,255,.10), transparent 38%, rgba(255,255,255,.05));
+  background: linear-gradient(120deg, rgba(255,255,255,.12), transparent 38%, rgba(255,255,255,.05));
   pointer-events:none;
 }
 .timer-overlay{
@@ -287,13 +316,17 @@ h3{ font-size:15px; color: rgba(238,242,255,.92); }
 .wave{
   width:10px; height:18px; border-radius:999px;
   background: linear-gradient(180deg, rgba(0,212,255,.65), rgba(46,196,182,.35));
-  animation: w 1.2s ease-in-out infinite;
-  opacity:.85;
+  opacity:.6;
 }
-.wave:nth-child(2){ animation-delay:.12s }
-.wave:nth-child(3){ animation-delay:.24s }
-.wave:nth-child(4){ animation-delay:.36s }
-.wave:nth-child(5){ animation-delay:.48s }
+.wavebox.playing .wave{ animation: w 1.2s ease-in-out infinite; opacity:.9; }
+.wave:nth-child(2){ height:26px; }
+.wave:nth-child(3){ height:34px; }
+.wave:nth-child(4){ height:40px; }
+.wave:nth-child(5){ height:36px; }
+.wavebox.playing .wave:nth-child(2){ animation-delay:.12s }
+.wavebox.playing .wave:nth-child(3){ animation-delay:.24s }
+.wavebox.playing .wave:nth-child(4){ animation-delay:.36s }
+.wavebox.playing .wave:nth-child(5){ animation-delay:.48s }
 @keyframes w{ 0%,100%{ height:16px } 50%{ height:56px } }
 
 /* Accordions */
@@ -339,3 +372,27 @@ h3{ font-size:15px; color: rgba(238,242,255,.92); }
 .smallbtn.ok{ border-color: rgba(46,196,182,.35); }
 .smallbtn.issue{ border-color: rgba(255,70,90,.35); }
 .smallbtn.na{ border-color: rgba(255,255,255,.25); }
+
+
+.timer-dock{
+  position: sticky;
+  bottom: 10px;
+  z-index: 6;
+  margin: 0 0 12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding:10px 12px;
+  border-radius:16px;
+  border:1px solid rgba(0,212,255,.28);
+  background: rgba(6,25,50,.78);
+  backdrop-filter: blur(8px);
+}
+.timer-dock-time{ font-weight:900; letter-spacing:.8px; }
+
+@media (prefers-reduced-motion: reduce){
+  .bg-sheen, .bg-blob, .water::before, .wavebox.playing .wave, .timer-tank.running .water-drop{
+    animation:none !important;
+  }
+}

@@ -1,4 +1,4 @@
-const CACHE_NAME = "isivolt-legionella-v13-cache-1";
+const CACHE_NAME = "isivolt-legionella-v13-cache-2";
 const ASSETS = [
   "./",
   "./index.html",

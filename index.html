@@ -13,6 +13,7 @@
   <div class="bg-blob blob-a"></div>
   <div class="bg-blob blob-b"></div>
   <div class="bg-sheen"></div>
+  <div class="bg-lightline"></div>
 
   <header class="topbar glass">
     <div class="brand">
@@ -23,6 +24,7 @@
       </div>
     </div>
     <div class="row">
+      <button id="btnMusic" class="btn btn-ghost" title="Música ambiente">🎵</button>
       <button id="btnGuide" class="btn btn-ghost" title="Guía rápida">🎧</button>
       <button id="btnSettings" class="btn btn-ghost" title="Ajustes">⚙️</button>
     </div>
@@ -32,14 +34,19 @@
     <!-- Perfil -->
     <section id="screenProfile" class="screen">
       <div class="card glass">
-        <h1>Selecciona Técnico</h1>
-        <p class="muted">V1.3 guarda datos en este móvil (modo bloc de notas). Puedes cambiar de técnico cuando quieras.</p>
+        <h1>Acceso técnico</h1>
+        <p class="muted">Solo puede entrar el técnico autorizado. Usa el acceso común del equipo.</p>
+        <label class="label">Usuario</label>
         <div class="row">
-          <input id="techName" class="input" placeholder="Nombre técnico (ej: Paco)" maxlength="18" />
+          <input id="techName" class="input" placeholder="Usuario" maxlength="18" />
+        </div>
+        <label class="label">Contraseña</label>
+        <div class="row">
+          <input id="techPassword" class="input" type="password" placeholder="Contraseña" maxlength="32" />
           <button id="btnSetTech" class="btn">Entrar</button>
         </div>
         <div class="divider"></div>
-        <p class="muted tiny">Consejo: usa el mismo nombre siempre en el mismo móvil para mantener historial limpio.</p>
+        <p class="muted tiny">Acceso inicial por defecto: usuario <b>tecnico</b> · contraseña <b>1234</b>. Luego puedes cambiarlo dentro de la app.</p>
       </div>
     </section>
 
@@ -53,10 +60,12 @@
               <div id="kpiTech" class="kpi-value">—</div>
             </div>
             <div class="row">
-              <button id="btnSwitchTech" class="btn btn-ghost">Cambiar</button>
-              <button id="btnLogout" class="btn btn-danger" title="Cerrar sesión">Cerrar</button>
+              <button id="btnEditAccess" class="btn btn-ghost">Acceso</button>
+              <button id="btnSwitchTech" class="btn btn-ghost" title="Bloquea la app y vuelve al login">Bloquear</button>
+              <button id="btnLogout" class="btn btn-danger" title="Cerrar sesión y salir">Salir</button>
             </div>
           </div>
+          <div class="tiny muted">Acceso = cambia usuario/clave. Bloquear = vuelve al login sin borrar datos.</div>
 
           <div class="kpi kpi-2">
             <div>
@@ -93,6 +102,14 @@
         </div>
       </div>
     </section>
+
+    <div id="timerDock" class="timer-dock hidden">
+      <div>
+        <div class="tiny muted">Cronómetro en marcha</div>
+        <div id="timerDockText" class="timer-dock-time">00:00</div>
+      </div>
+      <button id="btnOpenTimer" class="btn btn-primary">Volver al reloj</button>
+    </div>
 
     <!-- Scan -->
     <section id="screenScan" class="screen hidden">
@@ -205,7 +222,8 @@
           <button class="btn btn-ghost" id="btnExitTimer">✖</button>
         </div>
 
-        <div class="timer-tank">
+        <div class="timer-tank" id="timerTank">
+          <div class="water-drop" id="waterDrop"></div>
           <div class="water" id="waterFill"></div>
           <div class="tank-glass"></div>
           <div class="timer-overlay">
@@ -353,7 +371,7 @@
 
         <div class="divider"></div>
 
-        <div class="wavebox">
+        <div id="guideWavebox" class="wavebox">
           <div class="wave"></div><div class="wave"></div><div class="wave"></div><div class="wave"></div><div class="wave"></div>
         </div>
 
@@ -400,6 +418,27 @@
         <div class="row">
           <button id="btnSaveSettings" class="btn btn-primary">Guardar</button>
           <button id="btnResetSettings" class="btn btn-danger">Restablecer</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="modalAccess" class="modal hidden">
+      <div class="modal-card glass">
+        <div class="row space-between">
+          <h2>Acceso común</h2>
+          <button id="btnCloseAccess" class="btn btn-ghost">✖</button>
+        </div>
+
+        <p class="muted tiny">Desde aquí puedes cambiar el usuario y la contraseña que se pide para entrar a la app.</p>
+
+        <label class="label">Nuevo usuario</label>
+        <input id="accessUser" class="input" maxlength="18" placeholder="Usuario técnico" />
+
+        <label class="label">Nueva contraseña</label>
+        <input id="accessPass" class="input" type="password" maxlength="32" placeholder="Mínimo 4 caracteres" />
+
+        <div class="row" style="margin-top:12px;">
+          <button id="btnSaveAccess" class="btn btn-primary">Guardar acceso</button>
         </div>
       </div>
     </div>

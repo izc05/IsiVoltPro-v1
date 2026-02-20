@@ -31,9 +31,15 @@ const state = {
   timer: { running:false, paused:false, startTs:0, durationMs:0, elapsedMs:0, raf:0 }
 };
 
+const audioState = { ctx:null, musicOsc:null, musicGain:null };
+
+const ACCESS_KEY = "isivolt.access";
+const DEFAULT_ACCESS = { user: "tecnico", pass: "1234" };
 const SETTINGS_KEY = "isivolt.settings";
 const DEFAULT_SETTINGS = { bleachPct: 5, targetPpm: 50, baseMin: 10, factorPerL: 0.00 };
 const GUIDE_KEY = "isivolt.guideText";
+const SOUND_KEY = "isivolt.sound";
+const DEFAULT_SOUND = { musicOn:false };
 const DEFAULT_GUIDE = `Bienvenido a IsiVolt Pro V1 Legionella.
 
 OT diaria
@@ -51,6 +57,25 @@ Recuerda: dosis y tiempos están prefijados hasta confirmar protocolo exacto del
 
 function getTechNameFromUI(){
   return String($("techName")?.value || "").trim().slice(0, 18);
+}
+function getTechPasswordFromUI(){
+  return String($("techPassword")?.value || "").trim().slice(0, 32);
+}
+function getAccess(){
+  const raw = localStorage.getItem(ACCESS_KEY);
+  if (!raw) return { ...DEFAULT_ACCESS };
+  try {
+    const parsed = JSON.parse(raw) || {};
+    const user = String(parsed.user ?? DEFAULT_ACCESS.user).trim().slice(0,18);
+    const pass = String(parsed.pass ?? DEFAULT_ACCESS.pass).trim().slice(0,32);
+    if (!user || pass.length < 4) return { ...DEFAULT_ACCESS };
+    return { user, pass };
+  } catch {
+    return { ...DEFAULT_ACCESS };
+  }
+}
+function saveAccess(access){
+  localStorage.setItem(ACCESS_KEY, JSON.stringify(access));
 }
 function hasTechAccess(showMessage = true){
   const ok = Boolean(state.tech && state.tech.trim());
@@ -79,6 +104,7 @@ function show(screenName){
   for (const k of Object.keys(screens)){
     screens[k].classList.toggle("hidden", k !== screenName);
   }
+  updateTimerDock();
 }
 
 function getSettings(){
@@ -88,6 +114,65 @@ function getSettings(){
   catch { return { ...DEFAULT_SETTINGS }; }
 }
 function saveSettings(s){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+
+function getSoundPrefs(){
+  const raw = localStorage.getItem(SOUND_KEY);
+  if (!raw) return { ...DEFAULT_SOUND };
+  try { return { ...DEFAULT_SOUND, ...JSON.parse(raw) }; }
+  catch { return { ...DEFAULT_SOUND }; }
+}
+function saveSoundPrefs(v){ localStorage.setItem(SOUND_KEY, JSON.stringify(v)); }
+async function ensureAudioContext(){
+  if (audioState.ctx) return audioState.ctx;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  audioState.ctx = new Ctx();
+  return audioState.ctx;
+}
+async function playUiBeep(freq=660, ms=90, gainAmount=0.03){
+  const ctx = await ensureAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") await ctx.resume();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.value = freq;
+  gain.gain.value = gainAmount;
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start();
+  setTimeout(()=>{ try { osc.stop(); } catch {} }, ms);
+}
+async function setMusic(on){
+  const btn = $("btnMusic");
+  const ctx = await ensureAudioContext();
+  if (!ctx || !btn) return;
+  if (ctx.state === "suspended") await ctx.resume();
+
+  if (on){
+    if (!audioState.musicOsc){
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = 174;
+      gain.gain.value = 0.012;
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start();
+      audioState.musicOsc = osc;
+      audioState.musicGain = gain;
+    }
+    btn.textContent = "🎵 ON";
+  } else {
+    if (audioState.musicOsc){
+      try { audioState.musicOsc.stop(); } catch {}
+      audioState.musicOsc.disconnect();
+      audioState.musicGain?.disconnect();
+      audioState.musicOsc = null;
+      audioState.musicGain = null;
+    }
+    btn.textContent = "🎵";
+  }
+  saveSoundPrefs({ musicOn: on });
+}
 
 function normalizeCode(input){
   const s = String(input || "").trim();
@@ -286,6 +371,23 @@ function setWaterProgress(pct){
   const p = Math.max(0, Math.min(1, pct));
   $("waterFill").style.height = `${Math.round(p*100)}%`;
 }
+function setTankRunningUI(){
+  const tank = $("timerTank");
+  if (!tank) return;
+  tank.classList.toggle("running", state.timer.running && !state.timer.paused);
+}
+function updateTimerDock(){
+  const dock = $("timerDock");
+  if (!dock) return;
+  const t = state.timer;
+  if (!t.running){
+    dock.classList.add("hidden");
+    return;
+  }
+  const left = Math.max(0, t.durationMs - t.elapsedMs);
+  $("timerDockText").textContent = `${state.currentCode || "Punto"} · ${fmtTime(left)}${t.paused ? " (pausado)" : ""}`;
+  dock.classList.toggle("hidden", !screens.home || screens.home.classList.contains("hidden"));
+}
 function timerTick(){
   const t = state.timer;
   if (!t.running || t.paused) return;
@@ -296,6 +398,8 @@ function timerTick(){
 
   $("timerLeft").textContent = fmtTime(left);
   setWaterProgress(t.elapsedMs / t.durationMs);
+  setTankRunningUI();
+  updateTimerDock();
 
   if (left <= 0){
     finishTimer(true);
@@ -319,6 +423,8 @@ function startTimerForCurrent(){
   $("sealWarn").classList.add("hidden");
   $("btnPause").classList.remove("hidden");
   $("btnResume").classList.add("hidden");
+  setTankRunningUI();
+  updateTimerDock();
 
   const t = state.timer;
   t.running = true; t.paused = false;
@@ -330,6 +436,9 @@ function startTimerForCurrent(){
   setWaterProgress(0);
 
   show("timer");
+  setTankRunningUI();
+  updateTimerDock();
+  playUiBeep(720, 100, 0.03);
   stopRaf();
   t.raf = requestAnimationFrame(timerTick);
 }
@@ -358,8 +467,11 @@ async function finishTimer(auto=false){
   setWaterProgress(1);
   $("btnPause").classList.remove("hidden");
   $("btnResume").classList.add("hidden");
+  setTankRunningUI();
+  updateTimerDock();
 
   try { navigator.vibrate?.([120, 60, 120]); } catch {}
+  playUiBeep(920, 180, 0.04);
   if (auto) {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -404,6 +516,8 @@ function pauseTimer(){
   stopRaf();
   $("btnPause").classList.add("hidden");
   $("btnResume").classList.remove("hidden");
+  setTankRunningUI();
+  updateTimerDock();
 }
 function resumeTimer(){
   const t = state.timer;
@@ -412,6 +526,8 @@ function resumeTimer(){
   t.startTs = performance.now() - t.elapsedMs;
   $("btnPause").classList.remove("hidden");
   $("btnResume").classList.add("hidden");
+  setTankRunningUI();
+  updateTimerDock();
   t.raf = requestAnimationFrame(timerTick);
 }
 
@@ -425,13 +541,13 @@ async function markIssue(){
   t.paused = false;
   stopRaf();
 
-  const reason = prompt("Incidencia (rápido):
+  const reason = prompt(`Incidencia (rápido):
 - No accesible
 - Bomba no arranca
 - Sin retorno
 - Fuga
 
-Escribe una frase corta:");
+Escribe una frase corta:`);
   if (reason == null) return;
 
   $("timerCode").textContent = code;
@@ -455,6 +571,8 @@ Escribe una frase corta:");
 
   await saveOTNote(code, note || finalReason);
   await markOTStatus(code, "issue");
+  setTankRunningUI();
+  updateTimerDock();
   show("timer");
   try { navigator.vibrate?.([80,40,80]); } catch {}
 }
@@ -732,10 +850,10 @@ async function openMonthly(){
         await openMonthly();
       });
       el.querySelector('[data-na="1"]').addEventListener("click", async ()=>{
-        const r = prompt("No aplica (motivo):
+        const r = prompt(`No aplica (motivo):
 - Exterior (otra empresa)
 - Parking sin tomas
-- No corresponde este mes", it.note || "Exterior (otra empresa)");
+- No corresponde este mes`, it.note || "Exterior (otra empresa)");
         if (r == null) return;
         it.status = "na";
         it.updatedAt = Date.now();
@@ -774,8 +892,8 @@ async function addMonthlyQuick(code, water){
                 : String(el||"").toUpperCase().startsWith("FRE") ? "Fregadero"
                 : String(el||"").toUpperCase().startsWith("O") ? "Otro"
                 : "Ducha";
-  const desc = prompt("Descripción corta (opcional):
-Ej: 2ª Planta · Hab 21024 · Aseo", "") ?? "";
+  const desc = prompt(`Descripción corta (opcional):
+Ej: 2ª Planta · Hab 21024 · Aseo`, "") ?? "";
 
   await dbPutMonthly({
     key: `${tech}|${month}|${plant}|${water}|${c}`,
@@ -892,15 +1010,25 @@ function openGuide(){
 function saveGuideText(){
   localStorage.setItem(GUIDE_KEY, $("guideText").value);
 }
+function setGuideWavePlaying(on){
+  $("guideWavebox")?.classList.toggle("playing", !!on);
+}
 function speakGuide(){
   saveGuideText();
   if (!("speechSynthesis" in window)) return toast("Este móvil no soporta voz.");
   const u = new SpeechSynthesisUtterance($("guideText").value);
   u.lang = "es-ES";
+  u.onstart = ()=> setGuideWavePlaying(true);
+  u.onend = ()=> setGuideWavePlaying(false);
+  u.onerror = ()=> setGuideWavePlaying(false);
   window.speechSynthesis.cancel();
+  setGuideWavePlaying(true);
   window.speechSynthesis.speak(u);
 }
-function stopSpeak(){ if ("speechSynthesis" in window) window.speechSynthesis.cancel(); }
+function stopSpeak(){
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  setGuideWavePlaying(false);
+}
 
 // ---------------- Settings modal ----------------
 function openSettings(){
@@ -925,6 +1053,31 @@ function saveSettingsFromUI(){
   $("targetMinutes").value = calcAutoMinutes($("liters").value, s);
 }
 function resetSettings(){ saveSettings({ ...DEFAULT_SETTINGS }); openSettings(); }
+
+function openAccessModal(){
+  const access = getAccess();
+  $("accessUser").value = access.user;
+  $("accessPass").value = access.pass;
+  $("modalAccess").classList.remove("hidden");
+}
+function closeAccessModal(){
+  $("modalAccess").classList.add("hidden");
+}
+function saveAccessFromUI(){
+  const user = String($("accessUser").value || "").trim().slice(0,18);
+  const pass = String($("accessPass").value || "").trim().slice(0,32);
+  if (!user) return toast("El usuario no puede estar vacío.");
+  if (pass.length < 4) return toast("La contraseña debe tener al menos 4 caracteres.");
+
+  saveAccess({ user, pass });
+  state.tech = user;
+  localStorage.setItem("isivolt.tech", user);
+  $("techName").value = user;
+  $("techPassword").value = "";
+  closeAccessModal();
+  refreshOT();
+  toast("Acceso actualizado ✅");
+}
 
 // ---------------- Navigation & Events ----------------
 function bindNav(){
@@ -956,6 +1109,7 @@ function init(){
     navigator.serviceWorker.register("./sw.js").catch(()=>{});
   }
   bindNav();
+  setGuideWavePlaying(false);
 
   const pill = $("pillOffline");
   function updateOnline(){
@@ -967,8 +1121,14 @@ function init(){
   window.addEventListener("offline", updateOnline);
   updateOnline();
 
+  const sound = getSoundPrefs();
+  setMusic(Boolean(sound.musicOn));
+  updateTimerDock();
+
   if (!state.tech){
-    $("techName").value = "";
+    const access = getAccess();
+    $("techName").value = access.user;
+    $("techPassword").value = "";
     show("profile");
   } else {
     $("techName").value = state.tech;
@@ -977,10 +1137,20 @@ function init(){
   }
 
   async function doLogin(){
-    const name = getTechNameFromUI();
-    if (!name) return toast("Escribe el nombre del técnico.");
-    state.tech = name;
-    localStorage.setItem("isivolt.tech", name);
+    const user = getTechNameFromUI();
+    const pass = getTechPasswordFromUI();
+    const access = getAccess();
+
+    if (!user || !pass) return toast("Introduce usuario y contraseña.");
+
+    const userMatches = user.localeCompare(access.user, "es", { sensitivity:"accent" }) === 0;
+    const passMatches = pass === access.pass;
+    if (!userMatches || !passMatches) return toast("Acceso denegado. Revisa credenciales.");
+
+    state.tech = access.user;
+    localStorage.setItem("isivolt.tech", access.user);
+    $("techName").value = access.user;
+    $("techPassword").value = "";
     show("home");
     await refreshOT();
   }
@@ -991,11 +1161,20 @@ function init(){
   $("techName").addEventListener("keydown", async (e)=>{
     if (e.key === "Enter") await doLogin();
   });
+  $("techPassword").addEventListener("keydown", async (e)=>{
+    if (e.key === "Enter") await doLogin();
+  });
+
+  $("btnEditAccess").addEventListener("click", openAccessModal);
+  $("btnCloseAccess").addEventListener("click", closeAccessModal);
+  $("btnSaveAccess").addEventListener("click", saveAccessFromUI);
 
   $("btnSwitchTech").addEventListener("click", ()=>{
-    localStorage.removeItem("isivolt.tech");
     state.tech = "";
-    $("techName").value = "";
+    const access = getAccess();
+    $("techName").value = access.user;
+    $("techPassword").value = "";
+    toast("App bloqueada. Vuelve a entrar con usuario y contraseña.");
     show("profile");
   });
 
@@ -1003,7 +1182,9 @@ function init(){
     if (!confirm("¿Cerrar sesión en este móvil?")) return;
     localStorage.removeItem("isivolt.tech");
     state.tech = "";
-    $("techName").value = "";
+    const access = getAccess();
+    $("techName").value = access.user;
+    $("techPassword").value = "";
     show("profile");
   });
 
@@ -1023,10 +1204,10 @@ function init(){
   $("btnMonthly").addEventListener("click", ()=> openMonthly());
 
   $("btnExplainOT").addEventListener("click", ()=>{
-    alert("OT de hoy = la lista de puntos que vas a hacer hoy.
+    alert(`OT de hoy = la lista de puntos que vas a hacer hoy.
 
 Se crea añadiendo puntos (QR o código).
-Cuando completas un punto, queda ✅ y se guarda en el historial.");
+Cuando completas un punto, queda ✅ y se guarda en el historial.`);
   });
 
   $("btnClearOT").addEventListener("click", async ()=>{
@@ -1074,10 +1255,11 @@ Cuando completas un punto, queda ✅ y se guarda en el historial.");
   $("btnResume").addEventListener("click", resumeTimer);
   $("btnFinish").addEventListener("click", ()=> finishTimer(false));
   $("btnExitTimer").addEventListener("click", ()=>{
-    if (state.timer.running && !confirm("El cronómetro sigue en marcha. ¿Quieres salir igualmente?")) return;
-    state.timer.running = false;
-    state.timer.paused = false;
-    stopRaf();
+    if (state.timer.running){
+      toast("Cronómetro en marcha. Puedes navegar y volver cuando quieras.");
+      show("home");
+      return;
+    }
     show("home");
   });
 
@@ -1134,6 +1316,13 @@ Cuando completas un punto, queda ✅ y se guarda en el historial.");
   $("btnGuide").addEventListener("click", openGuide);
   $("btnSpeak").addEventListener("click", speakGuide);
   $("btnStopSpeak").addEventListener("click", stopSpeak);
+
+  $("btnOpenTimer").addEventListener("click", ()=> show("timer"));
+  $("btnMusic").addEventListener("click", async ()=>{
+    const current = getSoundPrefs();
+    await setMusic(!current.musicOn);
+    playUiBeep(520, 70, 0.025);
+  });
 }
 
 init();
