@@ -31,6 +31,22 @@ body{
   z-index:-3;
   pointer-events:none;
 }
+.bg-light-track{
+  position: fixed;
+  inset: -20% -40%;
+  background:
+    radial-gradient(600px 220px at 10% 50%, rgba(140, 224, 255, .10), transparent 70%),
+    radial-gradient(600px 220px at 90% 50%, rgba(46,196,182,.09), transparent 70%);
+  filter: blur(24px);
+  animation: lightTrack 16s linear infinite;
+  z-index:-4;
+  pointer-events:none;
+}
+@keyframes lightTrack{
+  0%{ transform: translateX(-8%) translateY(0); }
+  50%{ transform: translateX(8%) translateY(-2%); }
+  100%{ transform: translateX(-8%) translateY(0); }
+}
 @keyframes sheen{
   0%,100%{ transform: translate3d(0,0,0) rotate(0deg); opacity:.55; }
   50%{ transform: translate3d(40px,-30px,0) rotate(8deg); opacity:.75; }
@@ -128,11 +144,11 @@ h3{ font-size:15px; color: rgba(238,242,255,.92); }
   background: rgba(255,255,255,.08);
   color: var(--text);
   cursor:pointer;
-  transition: transform .08s ease, background .18s ease, border-color .18s ease;
+  transition: transform .16s ease, background .18s ease, border-color .18s ease, box-shadow .2s ease;
   white-space:nowrap;
 }
 .btn:active{ transform: scale(.98); }
-.btn:hover{ background: rgba(255,255,255,.11); border-color: rgba(255,255,255,.22); }
+.btn:hover{ background: rgba(255,255,255,.11); border-color: rgba(255,255,255,.22); transform: translateY(-1px); box-shadow: 0 10px 20px rgba(0,0,0,.2); }
 .btn-primary{
   background: linear-gradient(135deg, rgba(0,212,255,.30), rgba(46,196,182,.22));
   border-color: rgba(0,212,255,.30);
@@ -165,7 +181,9 @@ h3{ font-size:15px; color: rgba(238,242,255,.92); }
   border-radius:18px;
   border:1px solid rgba(255,255,255,.12);
   background: rgba(255,255,255,.05);
+  transition: transform .2s ease, background .15s ease, box-shadow .2s ease;
 }
+.item:hover{ transform: translateY(-2px); background: rgba(255,255,255,.09); box-shadow: 0 8px 20px rgba(0,0,0,.18); }
 .item .left{ display:flex; flex-direction:column; gap:2px; min-width: 0; }
 .item .code{ font-weight:900; letter-spacing:.7px; font-size:16px; }
 .item .meta{ font-size:12px; color: var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 52vw; }
@@ -218,14 +236,14 @@ h3{ font-size:15px; color: rgba(238,242,255,.92); }
   width:min(360px, 86vw);
   height:min(360px, 86vw);
   margin: 16px auto 8px;
-  border-radius: 28px;
+  border-radius: 50%;
   overflow:hidden;
   border:1px solid rgba(255,255,255,.14);
   box-shadow: var(--shadow);
   background: rgba(0,0,0,.20);
 }
 .water{
-  position:absolute; left:0; right:0; bottom:0;
+  position:absolute; left:0; right:0; top:0;
   height:0%;
   background:
     radial-gradient(circle at 20% 30%, rgba(255,255,255,.18), transparent 42%),
@@ -234,16 +252,28 @@ h3{ font-size:15px; color: rgba(238,242,255,.92); }
   filter: blur(.2px);
   transition: height .25s linear;
 }
-.water::before{
-  content:"";
-  position:absolute; left:-10%; right:-10%; top:-18px; height:40px;
-  background: rgba(255,255,255,.10);
-  border-radius: 50%;
-  filter: blur(6px);
-  animation: wave 2.2s ease-in-out infinite;
-  opacity:.85;
+.water-wave{
+  position:absolute;
+  left:-25%;
+  width:150%;
+  border-radius:45%;
+  background: rgba(255,255,255,.16);
+  opacity:.95;
+  pointer-events:none;
 }
-@keyframes wave{ 0%,100%{ transform: translateX(-8px);} 50%{ transform: translateX(10px);} }
+.water-wave.wave-a{
+  height:34px;
+  top: calc(100% - 18px);
+  animation: waveA 3.6s ease-in-out infinite;
+}
+.water-wave.wave-b{
+  height:28px;
+  top: calc(100% - 13px);
+  background: rgba(255,255,255,.11);
+  animation: waveB 2.2s linear infinite;
+}
+@keyframes waveA{ 0%,100%{ transform: translateX(-8%) rotate(0deg); } 50%{ transform: translateX(6%) rotate(1deg); } }
+@keyframes waveB{ 0%{ transform: translateX(0); } 100%{ transform: translateX(-14%); } }
 .tank-glass{
   position:absolute; inset:0;
   background: linear-gradient(120deg, rgba(255,255,255,.10), transparent 38%, rgba(255,255,255,.05));

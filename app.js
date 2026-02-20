@@ -31,6 +31,8 @@ const state = {
   timer: { running:false, paused:false, startTs:0, durationMs:0, elapsedMs:0, raf:0 }
 };
 
+let timerDockInterval = 0;
+
 const ACCESS_KEY = "isivolt.access";
 const DEFAULT_ACCESS = { user: "tecnico", pass: "1234" };
 const SETTINGS_KEY = "isivolt.settings";
@@ -140,6 +142,49 @@ function calcAutoMinutes(liters, settings){
 function toast(msg){
   try { navigator.vibrate?.(20); } catch {}
   alert(msg);
+}
+
+function playTone(type = "tap"){
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    const now = ctx.currentTime;
+
+    if (type === "done") {
+      o.type = "triangle";
+      o.frequency.setValueAtTime(740, now);
+      o.frequency.linearRampToValueAtTime(1040, now + 0.16);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+    } else {
+      o.type = "sine";
+      o.frequency.setValueAtTime(type === "pause" ? 320 : 560, now);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.045, now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+    }
+
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start(now);
+    o.stop(now + (type === "done" ? 0.34 : 0.1));
+    setTimeout(() => ctx.close(), 420);
+  } catch {}
+}
+
+function updateTimerDock(){
+  const btn = $("btnTimerDock");
+  if (!btn) return;
+  const t = state.timer;
+  if (!t.running) {
+    btn.classList.add("hidden");
+    return;
+  }
+  const left = Math.max(0, t.durationMs - t.elapsedMs);
+  btn.textContent = `⏱ ${fmtTime(left)}`;
+  btn.classList.remove("hidden");
 }
 
 // ---------------- OT ----------------
@@ -313,6 +358,7 @@ function timerTick(){
 
   $("timerLeft").textContent = fmtTime(left);
   setWaterProgress(t.elapsedMs / t.durationMs);
+  updateTimerDock();
 
   if (left <= 0){
     finishTimer(true);
@@ -347,8 +393,10 @@ function startTimerForCurrent(){
   setWaterProgress(0);
 
   show("timer");
+  playTone("tap");
   stopRaf();
   t.raf = requestAnimationFrame(timerTick);
+  updateTimerDock();
 }
 
 async function markOTStatus(code, status){
@@ -377,18 +425,7 @@ async function finishTimer(auto=false){
   $("btnResume").classList.add("hidden");
 
   try { navigator.vibrate?.([120, 60, 120]); } catch {}
-  if (auto) {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = 880;
-      gain.gain.value = 0.06;
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start();
-      setTimeout(()=>{ osc.stop(); ctx.close(); }, 180);
-    } catch {}
-  }
+  if (auto) playTone("done");
 
   $("sealDone").classList.remove("hidden");
 
@@ -412,6 +449,7 @@ async function finishTimer(auto=false){
 
   if (note) await saveOTNote(state.currentCode, note);
   await markOTStatus(state.currentCode, "ok");
+  updateTimerDock();
 }
 
 function pauseTimer(){
@@ -421,6 +459,8 @@ function pauseTimer(){
   stopRaf();
   $("btnPause").classList.add("hidden");
   $("btnResume").classList.remove("hidden");
+  playTone("pause");
+  updateTimerDock();
 }
 function resumeTimer(){
   const t = state.timer;
@@ -430,6 +470,7 @@ function resumeTimer(){
   $("btnPause").classList.remove("hidden");
   $("btnResume").classList.add("hidden");
   t.raf = requestAnimationFrame(timerTick);
+  playTone("tap");
 }
 
 async function markIssue(){
@@ -474,6 +515,8 @@ Escribe una frase corta:`);
   await markOTStatus(code, "issue");
   show("timer");
   try { navigator.vibrate?.([80,40,80]); } catch {}
+  playTone("pause");
+  updateTimerDock();
 }
 
 // ---------------- QR Scan ----------------
@@ -1051,12 +1094,8 @@ function init(){
   $("btnSaveAccess").addEventListener("click", saveAccessFromUI);
 
   $("btnSwitchTech").addEventListener("click", ()=>{
-    localStorage.removeItem("isivolt.tech");
-    state.tech = "";
-    const access = getAccess();
-    $("techName").value = access.user;
-    $("techPassword").value = "";
-    show("profile");
+    if (!state.timer.running) return toast("No hay cronómetro activo.");
+    show("timer");
   });
 
   $("btnLogout").addEventListener("click", ()=>{
@@ -1136,11 +1175,14 @@ Cuando completas un punto, queda ✅ y se guarda en el historial.`);
   $("btnResume").addEventListener("click", resumeTimer);
   $("btnFinish").addEventListener("click", ()=> finishTimer(false));
   $("btnExitTimer").addEventListener("click", ()=>{
-    if (state.timer.running && !confirm("El cronómetro sigue en marcha. ¿Quieres salir igualmente?")) return;
-    state.timer.running = false;
-    state.timer.paused = false;
-    stopRaf();
+    if (state.timer.running && !confirm("El cronómetro seguirá en marcha. ¿Salir para revisar otras pantallas?")) return;
     show("home");
+    updateTimerDock();
+  });
+
+  $("btnTimerDock").addEventListener("click", ()=>{
+    if (!state.timer.running) return;
+    show("timer");
   });
 
   $("btnExport").addEventListener("click", exportData);
@@ -1196,6 +1238,10 @@ Cuando completas un punto, queda ✅ y se guarda en el historial.`);
   $("btnGuide").addEventListener("click", openGuide);
   $("btnSpeak").addEventListener("click", speakGuide);
   $("btnStopSpeak").addEventListener("click", stopSpeak);
+
+  clearInterval(timerDockInterval);
+  timerDockInterval = setInterval(updateTimerDock, 500);
+  updateTimerDock();
 }
 
 init();

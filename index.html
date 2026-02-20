@@ -13,6 +13,7 @@
   <div class="bg-blob blob-a"></div>
   <div class="bg-blob blob-b"></div>
   <div class="bg-sheen"></div>
+  <div class="bg-light-track"></div>
 
   <header class="topbar glass">
     <div class="brand">
@@ -23,6 +24,7 @@
       </div>
     </div>
     <div class="row">
+      <button id="btnTimerDock" class="btn btn-ghost hidden" title="Volver al cronómetro activo">⏱ --:--</button>
       <button id="btnGuide" class="btn btn-ghost" title="Guía rápida">🎧</button>
       <button id="btnSettings" class="btn btn-ghost" title="Ajustes">⚙️</button>
     </div>
@@ -59,7 +61,7 @@
             </div>
             <div class="row">
               <button id="btnEditAccess" class="btn btn-ghost">Acceso</button>
-              <button id="btnSwitchTech" class="btn btn-ghost">Cambiar</button>
+              <button id="btnSwitchTech" class="btn btn-ghost">Reloj</button>
               <button id="btnLogout" class="btn btn-danger" title="Cerrar sesión">Cerrar</button>
             </div>
           </div>
@@ -212,7 +214,10 @@
         </div>
 
         <div class="timer-tank">
-          <div class="water" id="waterFill"></div>
+          <div class="water" id="waterFill">
+            <div class="water-wave wave-a"></div>
+            <div class="water-wave wave-b"></div>
+          </div>
           <div class="tank-glass"></div>
           <div class="timer-overlay">
             <div id="timerLeft" class="timer-left">00:00</div>
