@@ -28,7 +28,9 @@ const state = {
   detector: null,
   scanMode: "ot", // "ot" | "monthlyHot" | "monthlyCold"
   showEmptyMonthly: false,
-  timer: { running:false, paused:false, startTs:0, durationMs:0, elapsedMs:0, raf:0 }
+  timers: {},
+  timerViewCode: "",
+  timerRaf: 0
 };
 
 let timerDockInterval = 0;
@@ -174,17 +176,58 @@ function playTone(type = "tap"){
   } catch {}
 }
 
+function getTimer(code){ return state.timers[code] || null; }
+function countActiveTimers(){ return Object.values(state.timers).filter(t => t.running).length; }
+function getLeftMs(timer){ return Math.max(0, timer.durationMs - timer.elapsedMs); }
+function getBestActiveTimerCode(){
+  const active = Object.entries(state.timers)
+    .filter(([,t]) => t.running)
+    .sort((a,b)=> getLeftMs(a[1]) - getLeftMs(b[1]));
+  return active[0]?.[0] || "";
+}
+
 function updateTimerDock(){
   const btn = $("btnTimerDock");
   if (!btn) return;
-  const t = state.timer;
-  if (!t.running) {
+  const activeCount = countActiveTimers();
+  if (!activeCount) {
     btn.classList.add("hidden");
     return;
   }
-  const left = Math.max(0, t.durationMs - t.elapsedMs);
-  btn.textContent = `⏱ ${fmtTime(left)}`;
+  const code = getBestActiveTimerCode();
+  const t = getTimer(code);
+  const left = t ? fmtTime(getLeftMs(t)) : "--:--";
+  btn.textContent = activeCount > 1 ? `⏱ ${activeCount} activos · ${left}` : `⏱ ${left}`;
   btn.classList.remove("hidden");
+}
+
+function updateOTTimerBadges(){
+  document.querySelectorAll("[data-timer-code]").forEach((el)=>{
+    const code = el.getAttribute("data-timer-code");
+    const t = getTimer(code);
+    if (!t || !t.running){
+      el.classList.add("hidden");
+      return;
+    }
+    el.classList.remove("hidden");
+    const left = fmtTime(getLeftMs(t));
+    el.textContent = t.paused ? `⏸ ${left}` : `⏱ ${left}`;
+  });
+}
+
+function openTimerForCode(code){
+  const t = getTimer(code);
+  if (!t || !t.running) return toast("No hay cronómetro activo en esta OT.");
+  state.timerViewCode = code;
+  $("timerCode").textContent = code;
+  $("timerTarget").textContent = `Objetivo: ${t.targetMinutes} min`;
+  $("timerLeft").textContent = fmtTime(getLeftMs(t));
+  setWaterProgress(t.durationMs ? (t.elapsedMs / t.durationMs) : 0);
+  $("btnPause").classList.toggle("hidden", t.paused);
+  $("btnResume").classList.toggle("hidden", !t.paused);
+  $("sealDone").classList.add("hidden");
+  $("sealWarn").classList.add("hidden");
+  show("timer");
 }
 
 // ---------------- OT ----------------
@@ -213,15 +256,21 @@ async function refreshOT(){
       <div class="left">
         <div class="code">${it.code}</div>
         <div class="meta">${it.updatedAt ? new Date(it.updatedAt).toLocaleTimeString() : "—"}${note}</div>
+        <div class="meta hidden" data-timer-code="${it.code}">⏱ --:--</div>
       </div>
       <div class="row">
         <span class="badge ${badgeClass}">${badgeText}</span>
+        <button class="btn btn-ghost hidden" data-open-timer="${it.code}">Cronómetro</button>
         <button class="btn btn-ghost" data-open="${it.code}">Abrir</button>
         <button class="btn btn-ghost" data-edit="${it.code}" title="Editar código">✏️</button>
       </div>
     `;
     el.querySelector("[data-open]").addEventListener("click", () => openPoint(it.code));
     el.querySelector("[data-edit]").addEventListener("click", () => editOTCode(it.code));
+    const btnTimer = el.querySelector("[data-open-timer]");
+    const timer = getTimer(it.code);
+    btnTimer.classList.toggle("hidden", !(timer && timer.running));
+    btnTimer.addEventListener("click", () => openTimerForCode(it.code));
     list.appendChild(el);
   }
 }
@@ -296,6 +345,12 @@ Introduce el código correcto (usará los 5 últimos):`, oldC);
   await dbPutOT(it);
   await dbDeleteOTKey(oldKey);
 
+  if (state.timers[oldC]){
+    state.timers[newC] = state.timers[oldC];
+    delete state.timers[oldC];
+    if (state.timerViewCode === oldC) state.timerViewCode = newC;
+  }
+
   if (state.currentCode === oldC){
     state.currentCode = newC;
     state.currentOTKey = it.key;
@@ -303,6 +358,8 @@ Introduce el código correcto (usará los 5 últimos):`, oldC);
     $("timerCode").textContent = newC;
   }
   await refreshOT();
+  updateOTTimerBadges();
+  updateTimerDock();
 }
 
 // ---------------- Punto ----------------
@@ -343,60 +400,13 @@ function updateDoseUI(){
 }
 
 // ---------------- Timer (water fill) ----------------
-function stopRaf(){ if (state.timer.raf) cancelAnimationFrame(state.timer.raf); state.timer.raf = 0; }
+function stopRaf(){ if (state.timerRaf) cancelAnimationFrame(state.timerRaf); state.timerRaf = 0; }
 function setWaterProgress(pct){
   const p = Math.max(0, Math.min(1, pct));
-  $("waterFill").style.height = `${Math.round(p*100)}%`;
-}
-function timerTick(){
-  const t = state.timer;
-  if (!t.running || t.paused) return;
-
-  const now = performance.now();
-  t.elapsedMs = now - t.startTs;
-  const left = Math.max(0, t.durationMs - t.elapsedMs);
-
-  $("timerLeft").textContent = fmtTime(left);
-  setWaterProgress(t.elapsedMs / t.durationMs);
-  updateTimerDock();
-
-  if (left <= 0){
-    finishTimer(true);
-    return;
-  }
-  t.raf = requestAnimationFrame(timerTick);
-}
-
-function startTimerForCurrent(){
-  if (!hasTechAccess()) return;
-  const code = state.currentCode;
-  if (!code) return;
-
-  const mins = Number($("targetMinutes").value);
-  if (!isFinite(mins) || mins <= 0) return toast("Tiempo objetivo inválido.");
-
-  $("timerCode").textContent = code;
-  $("timerTarget").textContent = `Objetivo: ${mins} min`;
-
-  $("sealDone").classList.add("hidden");
-  $("sealWarn").classList.add("hidden");
-  $("btnPause").classList.remove("hidden");
-  $("btnResume").classList.add("hidden");
-
-  const t = state.timer;
-  t.running = true; t.paused = false;
-  t.durationMs = mins * 60 * 1000;
-  t.elapsedMs = 0;
-  t.startTs = performance.now();
-
-  $("timerLeft").textContent = fmtTime(t.durationMs);
-  setWaterProgress(0);
-
-  show("timer");
-  playTone("tap");
-  stopRaf();
-  t.raf = requestAnimationFrame(timerTick);
-  updateTimerDock();
+  const fill = $("waterFill");
+  fill.style.height = `${Math.round(p*100)}%`;
+  const y = -30 + (p * 30);
+  fill.style.transform = `translateY(${y.toFixed(1)}%)`;
 }
 
 async function markOTStatus(code, status){
@@ -410,78 +420,166 @@ async function markOTStatus(code, status){
   it.updatedAt = Date.now();
   it.defaultLiters = Number($("liters").value) || it.defaultLiters || 60;
   await dbPutOT(it);
-  await refreshOT();
 }
 
-async function finishTimer(auto=false){
-  const t = state.timer;
+async function finalizeTimerCode(code, result){
+  const t = getTimer(code);
+  if (!t) return;
   t.running = false;
   t.paused = false;
-  stopRaf();
 
-  $("timerLeft").textContent = "00:00";
-  setWaterProgress(1);
-  $("btnPause").classList.remove("hidden");
-  $("btnResume").classList.add("hidden");
-
-  try { navigator.vibrate?.([120, 60, 120]); } catch {}
-  if (auto) playTone("done");
-
-  $("sealDone").classList.remove("hidden");
-
-  const liters = Number($("liters").value) || null;
   const settings = getSettings();
-  const dose = liters ? Math.round(calcDoseMl(liters, settings) ?? 0) : null;
-  const mins = Number($("targetMinutes").value) || null;
-  const note = String($("pointNote").value || "").trim().slice(0,120);
+  const dose = t.liters ? Math.round(calcDoseMl(t.liters, settings) ?? 0) : null;
+  const note = String(t.note || "").trim().slice(0,120);
 
   await dbAddHistory({
     tech: state.tech,
     date: todayStr(),
-    code: state.currentCode,
+    code,
     ts: Date.now(),
-    liters,
-    doseMl: dose,
-    minutes: mins,
-    result: "ok",
+    liters: t.liters || null,
+    doseMl: result === "ok" ? dose : null,
+    minutes: t.targetMinutes || null,
+    result,
     note: note || undefined
   });
 
-  if (note) await saveOTNote(state.currentCode, note);
-  await markOTStatus(state.currentCode, "ok");
+  if (note) await saveOTNote(code, note);
+  await markOTStatus(code, result);
+}
+
+function timerTick(){
+  const now = performance.now();
+  const autoDone = [];
+
+  for (const [code, t] of Object.entries(state.timers)){
+    if (!t.running || t.paused) continue;
+    t.elapsedMs = now - t.startTs;
+    if (getLeftMs(t) <= 0){
+      t.elapsedMs = t.durationMs;
+      autoDone.push(code);
+    }
+  }
+
+  const viewCode = state.timerViewCode;
+  const viewTimer = viewCode ? getTimer(viewCode) : null;
+  if (viewTimer && viewTimer.running){
+    $("timerLeft").textContent = fmtTime(getLeftMs(viewTimer));
+    setWaterProgress(viewTimer.durationMs ? (viewTimer.elapsedMs / viewTimer.durationMs) : 0);
+    $("btnPause").classList.toggle("hidden", viewTimer.paused);
+    $("btnResume").classList.toggle("hidden", !viewTimer.paused);
+  }
+
+  if (autoDone.length){
+    Promise.all(autoDone.map(async (code)=>{
+      await finalizeTimerCode(code, "ok");
+      if (code === state.timerViewCode){
+        $("timerLeft").textContent = "00:00";
+        setWaterProgress(1);
+        $("sealDone").classList.remove("hidden");
+      }
+      try { navigator.vibrate?.([120, 60, 120]); } catch {}
+      playTone("done");
+    })).finally(async ()=>{
+      await refreshOT();
+      updateTimerDock();
+      updateOTTimerBadges();
+    });
+  }
+
   updateTimerDock();
+  updateOTTimerBadges();
+
+  if (countActiveTimers() > 0) {
+    state.timerRaf = requestAnimationFrame(timerTick);
+  } else {
+    stopRaf();
+  }
+}
+
+function startTimerForCurrent(){
+  if (!hasTechAccess()) return;
+  const code = state.currentCode;
+  if (!code) return;
+
+  const mins = Number($("targetMinutes").value);
+  if (!isFinite(mins) || mins <= 0) return toast("Tiempo objetivo inválido.");
+
+  const running = getTimer(code);
+  if (running && running.running && !confirm("Esta OT ya tiene un cronómetro activo. ¿Reiniciarlo?")) return;
+
+  state.timers[code] = {
+    running: true,
+    paused: false,
+    durationMs: mins * 60 * 1000,
+    elapsedMs: 0,
+    startTs: performance.now(),
+    liters: Number($("liters").value) || null,
+    targetMinutes: mins,
+    note: String($("pointNote").value || "").trim().slice(0,120)
+  };
+
+  playTone("tap");
+  openTimerForCode(code);
+  if (!state.timerRaf) state.timerRaf = requestAnimationFrame(timerTick);
+  updateTimerDock();
+  updateOTTimerBadges();
+  refreshOT();
+}
+
+async function finishTimer(){
+  const code = state.timerViewCode;
+  const t = getTimer(code);
+  if (!t || !t.running) return;
+
+  t.elapsedMs = t.durationMs;
+  t.running = false;
+  t.paused = false;
+  $("timerLeft").textContent = "00:00";
+  setWaterProgress(1);
+  $("btnPause").classList.remove("hidden");
+  $("btnResume").classList.add("hidden");
+  $("sealDone").classList.remove("hidden");
+
+  try { navigator.vibrate?.([120, 60, 120]); } catch {}
+  playTone("done");
+
+  t.note = String($("pointNote").value || "").trim().slice(0,120);
+  t.liters = Number($("liters").value) || t.liters;
+  await finalizeTimerCode(code, "ok");
+  await refreshOT();
+  updateTimerDock();
+  updateOTTimerBadges();
 }
 
 function pauseTimer(){
-  const t = state.timer;
-  if (!t.running || t.paused) return;
+  const code = state.timerViewCode;
+  const t = getTimer(code);
+  if (!t || !t.running || t.paused) return;
   t.paused = true;
-  stopRaf();
   $("btnPause").classList.add("hidden");
   $("btnResume").classList.remove("hidden");
   playTone("pause");
   updateTimerDock();
 }
 function resumeTimer(){
-  const t = state.timer;
-  if (!t.running || !t.paused) return;
+  const code = state.timerViewCode;
+  const t = getTimer(code);
+  if (!t || !t.running || !t.paused) return;
   t.paused = false;
   t.startTs = performance.now() - t.elapsedMs;
   $("btnPause").classList.remove("hidden");
   $("btnResume").classList.add("hidden");
-  t.raf = requestAnimationFrame(timerTick);
   playTone("tap");
+  if (!state.timerRaf) state.timerRaf = requestAnimationFrame(timerTick);
 }
 
 async function markIssue(){
   if (!hasTechAccess()) return;
-  const code = state.currentCode;
+  const code = state.timerViewCode || state.currentCode;
   if (!code) return;
-
-  const t = state.timer;
-  t.running = false;
-  t.paused = false;
-  stopRaf();
+  const t = getTimer(code);
+  if (!t || !t.running) return toast("No hay cronómetro activo para marcar incidencia.");
 
   const reason = prompt(`Incidencia (rápido):
 - No accesible
@@ -492,31 +590,24 @@ async function markIssue(){
 Escribe una frase corta:`);
   if (reason == null) return;
 
+  t.running = false;
+  t.paused = false;
+
   $("timerCode").textContent = code;
   $("sealDone").classList.add("hidden");
   $("sealWarn").classList.remove("hidden");
 
-  const note = String($("pointNote").value || "").trim().slice(0,120);
+  const noteUI = String($("pointNote").value || "").trim().slice(0,120);
   const finalReason = (reason.trim().slice(0,120) || "Incidencia");
+  t.note = noteUI ? `${finalReason} · ${noteUI}` : finalReason;
+  t.liters = Number($("liters").value) || t.liters;
 
-  await dbAddHistory({
-    tech: state.tech,
-    date: todayStr(),
-    code,
-    ts: Date.now(),
-    liters: Number($("liters").value) || null,
-    doseMl: null,
-    minutes: Number($("targetMinutes").value) || null,
-    result: "issue",
-    note: note ? `${finalReason} · ${note}` : finalReason
-  });
-
-  await saveOTNote(code, note || finalReason);
-  await markOTStatus(code, "issue");
-  show("timer");
+  await finalizeTimerCode(code, "issue");
+  await refreshOT();
   try { navigator.vibrate?.([80,40,80]); } catch {}
   playTone("pause");
   updateTimerDock();
+  updateOTTimerBadges();
 }
 
 // ---------------- QR Scan ----------------
@@ -1093,15 +1184,13 @@ function init(){
   $("btnCloseAccess").addEventListener("click", closeAccessModal);
   $("btnSaveAccess").addEventListener("click", saveAccessFromUI);
 
-  $("btnSwitchTech").addEventListener("click", ()=>{
-    if (!state.timer.running) return toast("No hay cronómetro activo.");
-    show("timer");
-  });
-
   $("btnLogout").addEventListener("click", ()=>{
     if (!confirm("¿Cerrar sesión en este móvil?")) return;
     localStorage.removeItem("isivolt.tech");
     state.tech = "";
+    state.timers = {};
+    state.timerViewCode = "";
+    stopRaf();
     const access = getAccess();
     $("techName").value = access.user;
     $("techPassword").value = "";
@@ -1173,16 +1262,23 @@ Cuando completas un punto, queda ✅ y se guarda en el historial.`);
 
   $("btnPause").addEventListener("click", pauseTimer);
   $("btnResume").addEventListener("click", resumeTimer);
-  $("btnFinish").addEventListener("click", ()=> finishTimer(false));
+  $("btnFinish").addEventListener("click", finishTimer);
   $("btnExitTimer").addEventListener("click", ()=>{
-    if (state.timer.running && !confirm("El cronómetro seguirá en marcha. ¿Salir para revisar otras pantallas?")) return;
+    if (countActiveTimers() && !confirm("Los cronómetros seguirán en marcha. ¿Salir para revisar otras pantallas?")) return;
+    show("home");
+    updateTimerDock();
+  });
+
+  $("btnMinimizeTimer").addEventListener("click", ()=>{
+    if (!countActiveTimers()) return toast("No hay cronómetros activos.");
     show("home");
     updateTimerDock();
   });
 
   $("btnTimerDock").addEventListener("click", ()=>{
-    if (!state.timer.running) return;
-    show("timer");
+    const code = getBestActiveTimerCode();
+    if (!code) return;
+    openTimerForCode(code);
   });
 
   $("btnExport").addEventListener("click", exportData);
@@ -1240,8 +1336,12 @@ Cuando completas un punto, queda ✅ y se guarda en el historial.`);
   $("btnStopSpeak").addEventListener("click", stopSpeak);
 
   clearInterval(timerDockInterval);
-  timerDockInterval = setInterval(updateTimerDock, 500);
+  timerDockInterval = setInterval(()=>{
+    updateTimerDock();
+    updateOTTimerBadges();
+  }, 500);
   updateTimerDock();
+  updateOTTimerBadges();
 }
 
 init();
