@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b132b" />
+  <title>IsiVolt Pro V1 · Legionella</title>
+
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-blob blob-a"></div>
+  <div class="bg-blob blob-b"></div>
+
+  <header class="topbar glass">
+    <div class="brand">
+      <div class="logo">⚡</div>
+      <div>
+        <div class="title">IsiVolt Pro V1</div>
+        <div class="subtitle">Legionella Control (PWA)</div>
+      </div>
+    </div>
+    <button id="btnSettings" class="btn btn-ghost" title="Ajustes">⚙️</button>
+  </header>
+
+  <main class="container">
+    <!-- Modal: Perfil técnico -->
+    <section id="screenProfile" class="screen">
+      <div class="card glass">
+        <h1>Selecciona Técnico</h1>
+        <p class="muted">V1 guarda datos en este móvil (modo bloc de notas). Puedes cambiar de técnico cuando quieras.</p>
+
+        <div class="row">
+          <input id="techName" class="input" placeholder="Nombre técnico (ej: Paco)" maxlength="18" />
+          <button id="btnSetTech" class="btn">Entrar</button>
+        </div>
+
+        <div class="divider"></div>
+        <p class="muted tiny">Sugerencia: nombres cortos. Luego (V2) pondremos login real + panel coordinador centralizado.</p>
+      </div>
+    </section>
+
+    <!-- Pantalla: Home -->
+    <section id="screenHome" class="screen hidden">
+      <div class="grid">
+        <div class="card glass">
+          <div class="kpi">
+            <div>
+              <div class="muted">Técnico</div>
+              <div id="kpiTech" class="kpi-value">—</div>
+            </div>
+            <button id="btnSwitchTech" class="btn btn-ghost">Cambiar</button>
+          </div>
+
+          <div class="kpi kpi-2">
+            <div>
+              <div class="muted">OT de hoy</div>
+              <div id="kpiToday" class="kpi-value">0 / 0</div>
+            </div>
+            <div class="pill" id="pillOffline">Offline OK</div>
+          </div>
+        </div>
+
+        <div class="card glass">
+          <h2>Acciones rápidas</h2>
+
+          <div class="actions">
+            <button id="btnScan" class="btn btn-primary">📷 Escanear QR</button>
+            <button id="btnAddCode" class="btn">➕ Añadir código</button>
+            <button id="btnHistory" class="btn btn-ghost">🕘 Historial</button>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="row">
+            <button id="btnNewOT" class="btn btn-ghost">🧾 Nueva OT (hoy)</button>
+            <button id="btnClearOT" class="btn btn-danger">🗑️ Vaciar OT</button>
+          </div>
+
+          <p class="muted tiny">Tip: crea la OT en el taller y luego solo vas tachando en campo.</p>
+        </div>
+
+        <div class="card glass">
+          <h2>OT de hoy</h2>
+          <div id="otList" class="list"></div>
+          <div id="otEmpty" class="empty muted">Aún no hay puntos. Añade con QR o con el código (5 dígitos).</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pantalla: Escaneo QR -->
+    <section id="screenScan" class="screen hidden">
+      <div class="card glass">
+        <div class="row space-between">
+          <h2>Escanear QR</h2>
+          <button class="btn btn-ghost" data-nav="home">✖</button>
+        </div>
+
+        <div class="muted tiny">Si tu móvil no soporta escaneo nativo, usa “Añadir código”.</div>
+
+        <div class="scanbox">
+          <video id="qrVideo" playsinline></video>
+          <div class="scan-overlay"></div>
+        </div>
+
+        <div class="row">
+          <button id="btnStartScan" class="btn btn-primary">Iniciar cámara</button>
+          <button id="btnStopScan" class="btn btn-ghost">Detener</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <input id="manualCodeFromScan" class="input" placeholder="O escribe 5 dígitos (ej: 7D003 → 0D003)" />
+          <button id="btnManualGo" class="btn">Ir</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pantalla: Punto (cálculo + checklist + iniciar) -->
+    <section id="screenPoint" class="screen hidden">
+      <div class="card glass">
+        <div class="row space-between">
+          <div>
+            <div class="muted">Ubicación</div>
+            <div id="pointCode" class="bigcode">—</div>
+          </div>
+          <button class="btn btn-ghost" data-nav="home">⬅</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="grid2">
+          <div class="panel glass-lite">
+            <h3>Calculadora</h3>
+
+            <label class="label">Litros de agua</label>
+            <div class="row">
+              <input id="liters" class="input" type="number" inputmode="decimal" min="0" step="1" placeholder="Ej: 60" />
+              <button id="btnUseDefaultLiters" class="btn btn-ghost">Habitual</button>
+            </div>
+
+            <div class="muted tiny">Valores prefijados (provisionales) hasta confirmar protocolo real.</div>
+
+            <div class="divider thin"></div>
+
+            <div class="calc-result">
+              <div class="muted">Dosis estimada (ml)</div>
+              <div id="doseMl" class="dose">—</div>
+              <div class="muted tiny" id="doseNote">
+                Basado en ppm objetivo y % lejía de ajustes. Verifica con protocolo del centro.
+              </div>
+            </div>
+
+            <div class="divider thin"></div>
+
+            <label class="label">Tiempo objetivo</label>
+            <div class="row">
+              <input id="targetMinutes" class="input" type="number" min="1" step="1" />
+              <button id="btnTimeAuto" class="btn btn-ghost">Auto</button>
+            </div>
+
+            <div class="row">
+              <button id="btnStartTimer" class="btn btn-primary">⏱ Iniciar proceso</button>
+              <button id="btnMarkIssue" class="btn btn-danger">⚠ Incidencia</button>
+            </div>
+          </div>
+
+          <div class="panel glass-lite">
+            <h3>Checklist</h3>
+            <div class="checklist">
+              <label><input type="checkbox" id="chkConnect" /> Conectar recirculación</label>
+              <label><input type="checkbox" id="chkReturn" /> Verificar retorno</label>
+              <label><input type="checkbox" id="chkDose" /> Añadir dosis</label>
+              <label><input type="checkbox" id="chkStart" /> Iniciar recirculación</label>
+            </div>
+
+            <div class="divider thin"></div>
+
+            <div class="muted tiny">
+              Consejo: marca 2–3 checks y luego pulsa “Iniciar proceso”. Al finalizar saldrá el sello ✅.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pantalla: Timer -->
+    <section id="screenTimer" class="screen hidden">
+      <div class="card glass center">
+        <div class="row space-between">
+          <div>
+            <div class="muted">En proceso</div>
+            <div id="timerCode" class="bigcode">—</div>
+          </div>
+          <button class="btn btn-ghost" id="btnExitTimer">✖</button>
+        </div>
+
+        <div class="timer-ring" id="timerRing">
+          <div class="timer-inner">
+            <div id="timerLeft" class="timer-left">00:00</div>
+            <div class="muted tiny" id="timerTarget">Objetivo: —</div>
+          </div>
+        </div>
+
+        <div class="row center">
+          <button id="btnPause" class="btn btn-ghost">⏸ Pausar</button>
+          <button id="btnResume" class="btn btn-ghost hidden">▶ Reanudar</button>
+          <button id="btnFinish" class="btn btn-primary">✅ Finalizar</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="sealDone" class="seal hidden">✔ TRATAMIENTO COMPLETADO</div>
+        <div id="sealWarn" class="seal seal-warn hidden">⚠ MARCADO CON INCIDENCIA</div>
+      </div>
+    </section>
+
+    <!-- Pantalla: Historial -->
+    <section id="screenHistory" class="screen hidden">
+      <div class="card glass">
+        <div class="row space-between">
+          <h2>Historial</h2>
+          <button class="btn btn-ghost" data-nav="home">⬅</button>
+        </div>
+
+        <div class="row">
+          <button id="btnExport" class="btn">📤 Exportar</button>
+          <button id="btnImport" class="btn btn-ghost">📥 Importar</button>
+          <input id="fileImport" type="file" accept="application/json" class="hidden" />
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="historyList" class="list"></div>
+        <div id="historyEmpty" class="empty muted">Sin registros aún.</div>
+      </div>
+    </section>
+
+    <!-- Modal: Ajustes -->
+    <div id="modalSettings" class="modal hidden">
+      <div class="modal-card glass">
+        <div class="row space-between">
+          <h2>Ajustes (V1)</h2>
+          <button id="btnCloseSettings" class="btn btn-ghost">✖</button>
+        </div>
+
+        <div class="grid2">
+          <div class="panel glass-lite">
+            <h3>Lejía / dosis (provisional)</h3>
+            <label class="label">% lejía (cloro activo aprox.)</label>
+            <input id="bleachPct" class="input" type="number" min="1" max="12" step="0.5" />
+
+            <label class="label">Objetivo ppm (mg/L)</label>
+            <input id="targetPpm" class="input" type="number" min="1" step="1" />
+
+            <div class="muted tiny">Se puede ajustar cuando confirmes los datos del protocolo.</div>
+          </div>
+
+          <div class="panel glass-lite">
+            <h3>Tiempos</h3>
+            <label class="label">Tiempo base (min)</label>
+            <input id="baseMin" class="input" type="number" min="1" step="1" />
+
+            <label class="label">Factor por litro (min/L)</label>
+            <input id="factorPerL" class="input" type="number" min="0" step="0.01" />
+
+            <div class="muted tiny">Auto = base + (L × factor). Si factor=0, queda fijo.</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <button id="btnSaveSettings" class="btn btn-primary">Guardar</button>
+          <button id="btnResetSettings" class="btn btn-danger">Restablecer</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

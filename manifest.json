@@ -1,0 +1,21 @@
+{
+  "name": "IsiVolt Pro V1 · Legionella",
+  "short_name": "IsiVolt Legionella",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b132b",
+  "theme_color": "#0b132b",
+  "description": "Control diario de legionella: OT, QR/código, calculadora, cronómetro y registro local.",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
