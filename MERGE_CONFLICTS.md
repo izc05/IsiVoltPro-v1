@@ -14,7 +14,7 @@ scripts/fix_pr_conflicts.sh main
 git push --force-with-lease origin <tu-rama>
 ```
 
-Si durante el `cherry-pick` aparece conflicto, el script se para y te indica cómo continuar.
+Si durante el `cherry-pick` aparece conflicto en `app.js` o `index.html`, el script lo auto-resuelve conservando tu versión del PR (`--theirs`). Si hay conflictos en otros archivos, se para y te indica cómo continuar manualmente.
 
 1. Trae la base más reciente:
 
