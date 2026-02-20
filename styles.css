@@ -264,11 +264,20 @@ h3{ font-size:15px; color: rgba(238,242,255,.92); }
   transform: translateY(-30%);
   will-change: height, transform;
   background:
-    radial-gradient(circle at 20% 30%, rgba(255,255,255,.18), transparent 42%),
-    radial-gradient(circle at 70% 60%, rgba(255,255,255,.14), transparent 46%),
-    linear-gradient(180deg, rgba(0,212,255,.55), rgba(46,196,182,.35));
-  filter: blur(.2px);
+    radial-gradient(circle at 18% 30%, rgba(255,255,255,.24), transparent 42%),
+    radial-gradient(circle at 76% 62%, rgba(255,255,255,.16), transparent 46%),
+    linear-gradient(180deg, rgba(68,218,255,.78) 0%, rgba(0,212,255,.54) 42%, rgba(46,196,182,.50) 100%);
+  filter: saturate(1.15);
   transition: height .25s linear, transform .25s linear;
+  overflow:hidden;
+}
+.water::after{
+  content:"";
+  position:absolute; inset:-10% -40% auto -40%;
+  height:58%;
+  background: linear-gradient(120deg, transparent 20%, rgba(255,255,255,.32) 45%, transparent 70%);
+  mix-blend-mode: screen;
+  animation: waterSheen 3.4s linear infinite;
 }
 .water-wave{
   position:absolute;
@@ -292,6 +301,7 @@ h3{ font-size:15px; color: rgba(238,242,255,.92); }
 }
 @keyframes waveA{ 0%,100%{ transform: translateX(-8%) rotate(0deg); } 50%{ transform: translateX(6%) rotate(1deg); } }
 @keyframes waveB{ 0%{ transform: translateX(0); } 100%{ transform: translateX(-14%); } }
+@keyframes waterSheen{ 0%{ transform: translateX(-18%) rotate(0deg); opacity:.35; } 50%{ opacity:.6; } 100%{ transform: translateX(18%) rotate(2deg); opacity:.35; } }
 .tank-glass{
   position:absolute; inset:0;
   background: linear-gradient(120deg, rgba(255,255,255,.10), transparent 38%, rgba(255,255,255,.05));
